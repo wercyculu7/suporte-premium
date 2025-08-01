@@ -1,3 +1,4 @@
+// suporte-premium/index.js (VERSÃO FINAL - Respeita o case do banco)
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
@@ -38,9 +39,9 @@ app.post('/webhook-meu-suporte', async (req, res) => {
             return res.status(404).send('Cliente original não encontrado.');
         }
 
-        // **CORREÇÃO APLICADA AQUI**
-        const idRevendedorOriginal = clienteExistente.rows[0].id_compra.toLowerCase();
-        console.log(`ID original do revendedor encontrado e padronizado: ${idRevendedorOriginal}`);
+        // AQUI ESTÁ A MUDANÇA IMPORTANTE: Pegamos o ID exatamente como ele está no banco
+        const idRevendedorOriginal = clienteExistente.rows[0].id_compra;
+        console.log(`ID original do revendedor encontrado: ${idRevendedorOriginal}`);
 
         if (statusPositivos.includes(order_status)) {
             await pool.query(
@@ -69,9 +70,11 @@ app.get('/verificar-suporte', async (req, res) => {
     }
 
     try {
+        // <<< AQUI ESTÁ A CORREÇÃO PRINCIPAL >>>
+        // Removemos o .toLowerCase(). Agora a busca respeita maiúsculas e minúsculas.
         const queryResult = await pool.query(
             "SELECT 1 FROM revendedores_premium WHERE id_revendedor = $1",
-            [idRevendedor.toLowerCase()]
+            [idRevendedor] 
         );
 
         if (queryResult.rowCount > 0) {
