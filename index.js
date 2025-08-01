@@ -17,7 +17,6 @@ app.get('/', (req, res) => {
     res.send('API do Sistema de Suporte Premium Online.');
 });
 
-// --- ROTA 1: WEBHOOK PARA O PRODUTO "MEU SUPORTE" (VERSÃO FINAL E ROBUSTA) ---
 app.post('/webhook-meu-suporte', async (req, res) => {
     const evento = req.body;
     const { order_status, Customer } = evento;
@@ -25,31 +24,25 @@ app.post('/webhook-meu-suporte', async (req, res) => {
 
     console.log(`Webhook de Suporte recebido para ${emailCliente}, Status: ${order_status}`);
 
-    // Status que significam que o acesso deve ser ATIVADO ou MANTIDO
     const statusPositivos = ['paid', 'approved'];
-
-    // Status que significam que o acesso deve ser REMOVIDO
     const statusNegativos = ['refunded', 'chargeback', 'canceled', 'expired', 'failed'];
 
     try {
-        // PASSO 1: Encontrar o ID de compra original do cliente na tabela 'compras'.
         const clienteExistente = await pool.query(
             'SELECT id_compra FROM compras WHERE email_cliente = $1 ORDER BY data_criacao ASC LIMIT 1',
             [emailCliente]
         );
 
-        // Se não encontrarmos o cliente na tabela principal, não há o que fazer.
         if (clienteExistente.rowCount === 0) {
-            console.error(`[SUPORTE PREMIUM] ERRO: Cliente com e-mail ${emailCliente} não encontrado na tabela 'compras'. Nenhuma ação tomada.`);
+            console.error(`[SUPORTE PREMIUM] ERRO: Cliente com e-mail ${emailCliente} não encontrado na tabela 'compras'.`);
             return res.status(404).send('Cliente original não encontrado.');
         }
 
-        const idRevendedorOriginal = clienteExistente.rows[0].id_compra;
-        console.log(`ID original do revendedor encontrado: ${idRevendedorOriginal}`);
+        // **CORREÇÃO APLICADA AQUI**
+        const idRevendedorOriginal = clienteExistente.rows[0].id_compra.toLowerCase();
+        console.log(`ID original do revendedor encontrado e padronizado: ${idRevendedorOriginal}`);
 
-        // PASSO 2: Tomar a decisão com base no status
         if (statusPositivos.includes(order_status)) {
-            // Se o pagamento foi aprovado, INSERE ou GARANTE que o ID esteja na lista premium.
             await pool.query(
                 'INSERT INTO revendedores_premium (id_revendedor, email_revendedor) VALUES ($1, $2) ON CONFLICT (id_revendedor) DO NOTHING',
                 [idRevendedorOriginal, emailCliente]
@@ -57,7 +50,6 @@ app.post('/webhook-meu-suporte', async (req, res) => {
             console.log(`[SUPORTE PREMIUM] ACESSO ATIVADO/MANTIDO para ${idRevendedorOriginal}.`);
         
         } else if (statusNegativos.includes(order_status)) {
-            // Se a assinatura foi cancelada, expirada, reembolsada, etc., REMOVE o ID da lista premium.
             await pool.query('DELETE FROM revendedores_premium WHERE id_revendedor = $1', [idRevendedorOriginal]);
             console.log(`[SUPORTE PREMIUM] ACESSO REMOVIDO para ${idRevendedorOriginal} devido ao status: ${order_status}.`);
         }
@@ -69,8 +61,6 @@ app.post('/webhook-meu-suporte', async (req, res) => {
     res.status(200).send('Webhook de suporte recebido e processado.');
 });
 
-
-// --- ROTA 2: VERIFICAÇÃO PARA A PÁGINA DE SUPORTE (INTOCADA) ---
 app.get('/verificar-suporte', async (req, res) => {
     const idRevendedor = req.query.id;
 
@@ -96,8 +86,6 @@ app.get('/verificar-suporte', async (req, res) => {
     }
 });
 
-
-// --- INICIALIZAÇÃO DO SERVIDOR ---
 app.listen(port, '0.0.0.0', () => {
     console.log(`Servidor de Suporte Premium rodando na porta ${port}`);
 });
